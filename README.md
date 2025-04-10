@@ -45,4 +45,4 @@ Este projeto provisiona automaticamente um servidor dedicado de **Valheim** util
 ---
 
 ## 📂 Estrutura do Projeto
-
+. ├── main.tf # Infraestrutura principal com Terraform ├── variables.tf # Variáveis utilizadas ├── startup_script.sh # Script de inicialização da VM ├── scripts/ │ └── send_player_count.sh # Script de monitoramento de players └── README.md 
