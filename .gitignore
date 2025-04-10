@@ -1,0 +1,30 @@
+# Diretório de estado e caches do Terraform
+.terraform/
+
+# Arquivos de plano e estado do Terraform
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
+# Arquivo com credenciais sensíveis (se usado)
+.terraformrc
+terraform.rc
+
+# Logs e arquivos temporários
+*.log
+*.bak
+*.tmp
+*.swp
+*.DS_Store
+
+# Ignore arquivos de override locais
+*.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Arquivos do sistema
+Thumbs.db
+ehthumbs.db
+Desktop.ini
