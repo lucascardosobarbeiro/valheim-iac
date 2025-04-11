@@ -1,48 +1,79 @@
-# ☁️ Valheim Dedicated Server on Google Cloud (IaC + Monitoring)
+# ☁️ Projeto Valheim na GCP com Terraform
 
-Este projeto provisiona automaticamente um servidor dedicado de **Valheim** utilizando **Google Cloud Platform (GCP)**, com **Terraform**, **Docker**, **monitoramento via Cloud Monitoring**, e automações de startup com scripts bash.
+## Objetivo
+Provisionar automaticamente uma VM na Google Cloud para rodar um servidor Valheim usando Docker, com:
 
----
-
-## ✅ O que já foi feito
-
-### 🌐 Infraestrutura como Código (IaC)
-
-- Provisionamento de uma VM com Terraform
-- Configuração de firewall para liberar as portas UDP 2456–2458 (Valheim)
-- Atribuição de um disco persistente e volume Docker para salvar dados do servidor
-
-### 🐳 Docker
-
-- Utilização da imagem [lloesche/valheim-server](https://hub.docker.com/r/lloesche/valheim-server)
-- Volume `/opt/valheim-data` configurado para persistir os dados (saves, configs)
-- Container configurado com variáveis de ambiente para nome, senha e mundo
-
-### 🚀 Script de Startup
-
-- Script bash automatizado via `metadata_startup_script` no Terraform
-- Instalação de dependências e inicialização do servidor Docker automaticamente
-
-### 📊 Monitoramento com Cloud Monitoring
-
-- Script `send_player_count.sh` envia a quantidade de jogadores conectados via métrica customizada do GCP
-- Cronjob configurado para execução a cada 5 minutos
-- Métrica: `custom.googleapis.com/valheim/players_online`
+- IP fixo
+- Firewall configurado
+- Persistência com volume Docker
+- Métrica personalizada `players_online` no Cloud Monitoring
+- Backup automático com Auto Snapshots
 
 ---
 
-## 🛠️ O que ainda será implementado
+## Infraestrutura Criada
 
-- [ ] **Alertas com Cloud Monitoring**
-  - Notificações por e-mail quando players entrarem ou o servidor ficar inativo
-- [ ] **Bot Discord (Opcional)**
-  - Comando para ligar o servidor e exibir status online
-- [ ] **Página Web simples**
-  - Mostrar o status do servidor e número de jogadores em tempo real
-- [ ] **Backup automático para Cloud Storage**
-  - Backups dos mundos em GCS com versão e retenção
+### Rede
+- **VPC personalizada:** `valheim-network`
+- **Sub-rede:** `valheim-subnet` com CIDR `10.10.0.0/24`
+- **Firewall:**
+  - Libera UDP `2456-2458` (porta do Valheim)
+  - Libera TCP `22` (SSH)
+
+### VM: `valheim-server`
+- **Tipo:** `e2-highmem-2` (2 vCPUs / 16 GB RAM)
+- **Imagem:** Ubuntu 22.04
+- **Disco:** 20 GB padrão + auto snapshot diário
+- **IP externo:** fixo via `google_compute_address`
+- **Tag de rede:** `valheim`
+
+### Docker + UFW
+- Docker instalado e configurado
+- UFW habilitado com portas necessárias
+- Container `lloesche/valheim-server` com variáveis:
+  - `SERVER_NAME`
+  - `WORLD_NAME`
+  - `SERVER_PASS`
+
+### Monitoramento
+- Cloud Ops Agent instalado
+- Script `/opt/monitoring/send_metric.sh`:
+  - Executa a cada 5 minutos via cron
+  - Envia métrica `custom.googleapis.com/valheim/players_online` com base em conexões na porta UDP 2456
+
+### Backup Automático (Snapshot)
+- Política de snapshot diário configurada com retenção de 7 dias: `auto-snapshot-daily`
+- Disco da VM vinculado automaticamente à política
 
 ---
 
-## 📂 Estrutura do Projeto
-. ├── main.tf # Infraestrutura principal com Terraform ├── variables.tf # Variáveis utilizadas ├── startup_script.sh # Script de inicialização da VM ├── scripts/ │ └── send_player_count.sh # Script de monitoramento de players └── README.md 
+## Estrutura dos Arquivos
+
+```
+.
+├── main.tf                 # Infraestrutura principal
+├── variables.tf            # Variáveis do projeto
+├── startup_script.tmpl     # Script de inicialização da VM
+└── terraform.tfvars        # (opcional) valores personalizados
+```
+
+---
+
+## Como Usar
+
+```bash
+# Inicializa o Terraform
+terraform init
+
+# Visualiza o que será criado
+terraform plan
+
+# Cria os recursos na GCP
+terraform apply
+```
+
+---
+
+## Autor
+Projeto criado por Lucas, como parte de aprendizado e prática de infraestrutura moderna com GCP e Terraform. ✨
+
