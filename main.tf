@@ -39,18 +39,22 @@ resource "google_compute_address" "valheim_static_ip" {
   region = var.region
 }
 
+resource "google_compute_disk" "valheim_boot_disk" {
+  name  = "${var.vm_name}-boot-disk"
+  type  = "pd-standard"
+  zone  = var.zone
+  size  = 20
+
+  image = "ubuntu-os-cloud/ubuntu-2204-lts"
+}
+
 resource "google_compute_instance" "valheim_vm" {
   name         = var.vm_name
   machine_type = var.machine_type
   zone         = var.zone
- 
 
- 
   boot_disk {
-    initialize_params {
-      image = "ubuntu-os-cloud/ubuntu-2204-lts"
-      size  = 20
-    }
+    source = google_compute_disk.valheim_boot_disk.id
   }
 
   network_interface {
@@ -67,15 +71,14 @@ resource "google_compute_instance" "valheim_vm" {
     enable-oslogin = "TRUE"
   }
 
-  metadata_startup_script = templatefile("startup_script.sh", {
-  server_name     = var.server_name
-  world_name      = var.world_name
-  server_password = var.server_pass
-  project_id      = var.project_id
-  zone            = var.zone
-  instance_name   = var.vm_name         # <- Adiciona isso aqui
-})
-
+  metadata_startup_script = templatefile("startup_script.tmpl", {
+    server_name     = var.server_name
+    world_name      = var.world_name
+    server_password = var.server_password
+    project_id      = var.project_id
+    zone            = var.zone
+    instance_name   = var.vm_name
+  })
 
   service_account {
     scopes = [
@@ -87,4 +90,36 @@ resource "google_compute_instance" "valheim_vm" {
     game = "valheim"
     env  = "prod"
   }
-} 
+}
+
+resource "google_compute_resource_policy" "valheim_snapshots" {
+  name   = "valheim-daily-snapshot"
+  region = var.region
+
+  snapshot_schedule_policy {
+    schedule {
+      daily_schedule {
+        days_in_cycle = 1
+        start_time    = "03:00"
+      }
+    }
+
+    retention_policy {
+      max_retention_days    = 7
+      on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
+    }
+
+    snapshot_properties {
+      labels = {
+        backup = "true"
+      }
+    }
+  }
+}
+
+resource "google_compute_disk_resource_policy_attachment" "valheim_disk_policy" {
+  name = google_compute_resource_policy.valheim_snapshots.name
+  disk = google_compute_disk.valheim_boot_disk.name
+  zone = var.zone
+  depends_on = [google_compute_instance.valheim_vm]
+}

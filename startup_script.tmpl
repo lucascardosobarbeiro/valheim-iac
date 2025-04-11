@@ -1,0 +1,87 @@
+#!/bin/bash
+
+USER_HOME="/home/valheim"
+DOCKER_VOLUME="/opt/valheim-data"
+SERVER_CONTAINER_NAME="valheim-server"
+
+# Atualiza pacotes e instala dependências
+apt-get update -y && apt-get upgrade -y
+apt-get install -y docker.io ufw curl
+
+# Cria o usuário para rodar o servidor
+useradd -m -d $USER_HOME -s /usr/sbin/nologin valheim
+usermod -aG docker valheim
+
+# Habilita e inicia o Docker
+systemctl enable docker
+systemctl start docker
+
+# Cria volume persistente
+mkdir -p $DOCKER_VOLUME
+chown valheim:valheim $DOCKER_VOLUME
+
+# Sobe o container do Valheim
+docker run -d \
+  --name $SERVER_CONTAINER_NAME \
+  -p 2456-2458:2456-2458/udp \
+  -v $DOCKER_VOLUME:/config \
+  -e SERVER_NAME="${server_name}" \
+  -e WORLD_NAME="${world_name}" \
+  -e SERVER_PASS="${server_password}" \
+  -e TZ="America/Sao_Paulo" \
+  --restart unless-stopped \
+  lloesche/valheim-server
+
+# Regras de firewall com UFW
+ufw default deny incoming
+ufw allow 22/tcp
+ufw allow 2456:2458/udp
+ufw --force enable
+
+# Instala o Cloud Ops Agent
+curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+bash add-google-cloud-ops-agent-repo.sh --also-install
+
+# Cria script de envio da métrica para o Cloud Monitoring
+mkdir -p /opt/monitoring
+
+cat << 'EOF' > /opt/monitoring/send_metric.sh
+#!/bin/bash
+
+PLAYER_COUNT=$(ss -u -n | grep 2456 | wc -l)
+ACCESS_TOKEN=$(gcloud auth print-access-token)
+
+curl -X POST \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  https://monitoring.googleapis.com/v3/projects/server-valheim-iac-v2/timeSeries \
+  -d "{
+    \"timeSeries\": [{
+      \"metric\": {
+        \"type\": \"custom.googleapis.com/valheim/players_online\"
+      },
+      \"resource\": {
+        \"type\": \"global\",
+        \"labels\": {
+          \"project_id\": \"server-valheim-iac-v2\"
+        }
+      },
+      \"points\": [{
+        \"interval\": {
+          \"endTime\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+        },
+        \"value\": {
+          \"int64Value\": $PLAYER_COUNT
+        }
+      }]
+    }]
+  }"
+EOF
+
+chmod +x /opt/monitoring/send_metric.sh
+
+# Agendamento no cron
+echo "*/5 * * * * root /opt/monitoring/send_metric.sh" > /etc/cron.d/valheim-player-monitor
+
+# Log de sucesso
+echo "Valheim server provisionado com sucesso em $(date)" >> /var/log/valheim_startup.log

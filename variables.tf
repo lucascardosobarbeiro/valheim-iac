@@ -32,5 +32,12 @@ variable "server_pass" {
 variable "machine_type" {
   description = "Tipo de máquina da VM"
   type        = string
-  default     = "e2-medium" # ou outro tipo como n1-standard-1, e2-standard-2 etc.
+  default     = "e2-standard-2" # ou outro tipo como n1-standard-1, e2-standard-2 etc.
+}
+
+
+variable "server_password" {
+  description = "Senha do servidor Valheim"
+  type        = string
+  sensitive   = true
 }
