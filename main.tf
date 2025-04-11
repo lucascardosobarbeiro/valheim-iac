@@ -54,8 +54,14 @@ resource "google_compute_instance" "valheim_vm" {
   zone         = var.zone
 
   boot_disk {
-    source = google_compute_disk.valheim_boot_disk.id
+  initialize_params {
+    image = "projects/debian-cloud/global/images/family/debian-12"
+    size  = 20
+    type  = "pd-balanced"
   }
+  auto_delete = true
+}
+
 
   network_interface {
     network    = google_compute_network.valheim_net.id
